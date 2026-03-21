@@ -1,12 +1,10 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { BarChart3, Recycle, ArrowLeft, Lightbulb } from "lucide-react";
 
-interface DashboardPageProps {
-  onBack: () => void;
-}
-
-const DashboardPage = ({ onBack }: DashboardPageProps) => {
+const DashboardPage = () => {
+  const navigate = useNavigate();
   const [area, setArea] = useState(1000);
   const [type, setType] = useState("RCC");
   const [distance, setDistance] = useState(25);
@@ -42,10 +40,10 @@ const DashboardPage = ({ onBack }: DashboardPageProps) => {
       <aside className="w-full lg:w-[380px] bg-card border-b lg:border-b-0 lg:border-r border-border p-6 lg:p-8 flex flex-col gap-6 lg:overflow-y-auto lg:min-h-screen">
         <div>
           <button
-            onClick={onBack}
+            onClick={() => navigate("/profile")}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
           >
-            <ArrowLeft size={16} /> Back
+            <ArrowLeft size={16} /> Back to Profile
           </button>
 
           <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
