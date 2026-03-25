@@ -17,6 +17,7 @@ import {
   Recycle,
   PackageSearch,
   BadgeDollarSign,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -52,7 +53,7 @@ const userServices = [
   },
 ];
 
-const vendorServices = [
+const vendorServicesData = [
   {
     icon: Truck,
     title: "Waste Collection & Transport",
@@ -84,9 +85,9 @@ const ProfilePage = () => {
     return null;
   }
 
-  const services = user.role === "vendor" ? vendorServices : userServices;
+  const services = user.role === "vendor" ? vendorServicesData : userServices;
   const roleLabel = user.role === "vendor" ? "Vendor" : "User";
-  const roleColor = user.role === "vendor" ? "bg-amber-100 text-amber-800" : "bg-emerald-bg text-emerald-deep";
+  const roleColor = user.role === "vendor" ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-bg text-emerald-deep border-emerald-deep/20";
 
   const details = [
     { icon: User, label: "Full Name", value: user.name },
@@ -109,11 +110,13 @@ const ProfilePage = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <nav className="flex justify-between items-center px-6 md:px-8 py-5 max-w-7xl mx-auto">
-        <div className="flex items-center gap-2.5 font-bold text-xl tracking-tighter">
-          <div className="w-8 h-8 bg-accent rounded-button flex items-center justify-center text-accent-foreground text-sm font-extrabold">
-            V
+        <div className="flex flex-col md:flex-row md:items-center gap-2.5 font-bold text-xl tracking-tighter">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-accent rounded-button flex items-center justify-center text-accent-foreground text-sm font-extrabold shadow-sm">
+              V
+            </div>
+            <span>VERIDIAN</span>
           </div>
-          VERIDIAN
         </div>
         <button
           onClick={() => {
@@ -137,81 +140,124 @@ const ProfilePage = () => {
         >
           <motion.div variants={fadeUp} custom={0} className="mb-10">
             <div className="flex flex-wrap items-center gap-3 mb-2">
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
                 Welcome, {user.name.split(" ")[0]}
               </h1>
-              <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${roleColor}`}>
-                {roleLabel}
+              <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${roleColor}`}>
+                {roleLabel} {user.role === "vendor" ? "Partner" : "Account"}
               </span>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground max-w-2xl text-lg mt-3">
               {user.role === "vendor"
-                ? "Here's your vendor profile and the services you can provide on Veridian."
-                : "Here's your profile and the services available to you on Veridian."}
+                ? "Manage your vendor profile, view your service offerings, and access our dashboard tools."
+                : "Manage your profile, set your sustainability goals, and track your construction waste carbon footprint."}
             </p>
           </motion.div>
 
-          {/* Details Card */}
-          <motion.div
-            variants={fadeUp}
-            custom={1}
-            className="bg-card rounded-card p-6 md:p-8 shadow-card mb-10 border border-border"
-          >
-            <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
-              <User size={18} className="text-accent" /> Profile Details
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {details.map((d, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-button bg-secondary/50">
-                  <d.icon size={16} className="text-accent mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                      {d.label}
-                    </p>
-                    <p className="text-sm font-semibold mt-0.5">{d.value}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mb-10">
+            {/* Details Card */}
+            <motion.div
+              variants={fadeUp}
+              custom={1}
+              className="lg:col-span-2 bg-card rounded-card p-6 md:p-8 shadow-card border border-border"
+            >
+              <h3 className="font-bold text-lg mb-5 flex items-center gap-2 text-foreground">
+                <User size={18} className="text-accent" /> Account Info
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {details.map((d, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-button bg-secondary/50 border border-border/40">
+                    <d.icon size={16} className="text-accent mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">
+                        {d.label}
+                      </p>
+                      <p className="text-sm font-semibold">{d.value}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+                ))}
+              </div>
+            </motion.div>
 
-          {/* Services */}
-          <motion.div variants={fadeUp} custom={2} className="mb-10">
+            {/* Persona Objectives Snippet */}
+            <motion.div
+              variants={fadeUp}
+              custom={2}
+              className="bg-accent/10 rounded-card p-6 md:p-8 border border-accent/20 shadow-sm"
+            >
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-deep dark:text-emerald-light">
+                <Target size={18} /> 
+                {user.role === "vendor" ? "Your Services" : "Primary Objective"}
+              </h3>
+              {user.role === "vendor" ? (
+                <div className="space-y-3">
+                  {user.vendorServices && user.vendorServices.length > 0 ? (
+                    user.vendorServices.map((srv, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2.5 bg-background rounded-md text-sm font-medium border border-border shadow-sm">
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                        {srv}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No services listed yet.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-background rounded-md border border-border text-center shadow-sm h-full flex items-center justify-center flex-col gap-2">
+                  <div className="w-10 h-10 rounded-full bg-emerald-bg flex items-center justify-center mb-1">
+                    <Leaf size={20} className="text-accent" />
+                  </div>
+                  <p className="text-sm font-bold text-foreground">
+                    {user.userPurpose || "Carbon Footprint Tracking"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Aligned with global sustainability standards
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Services Array */}
+          <motion.div variants={fadeUp} custom={3} className="mb-10">
             <h3 className="font-bold text-lg mb-1">
-              {user.role === "vendor" ? "Services You Can Provide" : "Available Services"}
+              {user.role === "vendor" ? "Platform Market Overview" : "Available Platform Services"}
             </h3>
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
               {user.role === "vendor"
-                ? "As a vendor on Veridian, you can offer these services to construction projects."
-                : "As a registered user, you can avail these services for your construction projects."}
+                ? "Connecting contractors with sustainable vendors. See where your services fit in the ecosystem."
+                : "Explore the different capabilities on Veridian tailored to reduce your structural emissions."}
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {services.map((s, i) => (
                 <motion.div
                   key={i}
                   initial="hidden"
                   animate="visible"
-                  custom={i + 3}
+                  custom={i + 4}
                   variants={fadeUp}
-                  className="bg-card rounded-card p-5 shadow-card border border-border hover:shadow-elevated transition-shadow"
+                  className="bg-card rounded-card p-5 shadow-card border border-border hover:shadow-elevated transition-shadow flex flex-col"
                 >
-                  <div className="w-10 h-10 rounded-button bg-emerald-bg flex items-center justify-center mb-3">
-                    <s.icon size={20} className="text-accent" />
+                  <div className="w-10 h-10 rounded-button bg-secondary flex items-center justify-center mb-4">
+                    <s.icon size={18} className="text-foreground" />
                   </div>
-                  <h4 className="font-bold text-sm mb-1">{s.title}</h4>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+                  <h4 className="font-bold text-sm mb-2 leading-tight">{s.title}</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-auto">
+                    {s.desc}
+                  </p>
                 </motion.div>
               ))}
             </div>
           </motion.div>
 
           {/* CTA */}
-          <motion.div variants={fadeUp} custom={7} className="text-center pt-4 pb-8">
+          <motion.div variants={fadeUp} custom={8} className="text-center pt-4 pb-8 border-t border-border mt-12">
+            <h3 className="font-bold text-xl mb-4">Ready to analyze your site data?</h3>
             <button
               onClick={() => navigate("/dashboard")}
               className="inline-flex items-center gap-2.5 bg-accent text-accent-foreground px-8 py-4 rounded-button text-base font-semibold hover:brightness-110 transition-all active:scale-[0.98] shadow-elevated"
             >
-              Go to Carbon Dashboard <ArrowRight size={18} />
+              Open Carbon Dashboard <ArrowRight size={18} />
             </button>
           </motion.div>
         </motion.div>

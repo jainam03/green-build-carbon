@@ -1,14 +1,25 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 export type UserRole = "user" | "vendor";
 
 export interface AppUser {
+  id?: string;
   email: string;
   name: string;
   role: UserRole;
   company: string;
   phone: string;
   registeredAt: string;
+  vendorServices?: string[];
+  userPurpose?: string;
 }
 
 interface RegisterData {
@@ -18,114 +29,128 @@ interface RegisterData {
   role: UserRole;
   company: string;
   phone: string;
+  vendorServices?: string[];
+  userPurpose?: string;
 }
 
 interface AuthContextType {
   user: AppUser | null;
-  signIn: (email: string, password: string) => { success: boolean; error?: string };
-  register: (data: RegisterData) => { success: boolean; error?: string };
-  signOut: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USERS_STORAGE_KEY = "veridian_users";
-const SESSION_STORAGE_KEY = "veridian_session";
-
-interface StoredUser extends AppUser {
-  password: string;
-}
-
-function getStoredUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-}
-
-function getSession(): AppUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(user: AppUser | null) {
-  if (user) {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  }
-}
-
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Unified Session Management directly from Google Cloud
   useEffect(() => {
-    const session = getSession();
-    if (session) setUser(session);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Fetch custom user details (role, company, etc.) from Firestore
+        try {
+          const docRef = doc(db, "users", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUser({ id: firebaseUser.uid, ...docSnap.data() } as AppUser);
+          } else {
+            console.error("No custom Firestore data found for this authenticated user");
+            setUser(null);
+          }
+        } catch (error) {
+          console.error("Failed to load user profile:", error);
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return unsubscribe; // Cleanup subscription on unmount
   }, []);
 
-  const register = (data: RegisterData): { success: boolean; error?: string } => {
-    const users = getStoredUsers();
-    if (users.some((u) => u.email.toLowerCase() === data.email.toLowerCase())) {
-      return { success: false, error: "An account with this email already exists." };
+  const signIn = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged takes over retrieving the Firestore doc
+      return { success: true };
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      return { success: false, error: err.message || 'Login failed' };
     }
-
-    const newUser: StoredUser = {
-      email: data.email,
-      name: data.name,
-      role: data.role,
-      company: data.company,
-      phone: data.phone,
-      password: data.password,
-      registeredAt: new Date().toISOString(),
-    };
-
-    saveStoredUsers([...users, newUser]);
-    return { success: true };
   };
 
-  const signIn = (email: string, password: string): { success: boolean; error?: string } => {
-    const users = getStoredUsers();
-    const found = users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
+  const register = async (data: RegisterData) => {
+    try {
+      // 1. Create Identity in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const uid = userCredential.user.uid;
+      const firebaseUser = userCredential.user;
 
-    if (!found) {
-      return { success: false, error: "Invalid email or password." };
+      try {
+        // 2. Build User Profile Document
+        const userProfile = {
+          email: data.email,
+          name: data.name,
+          role: data.role,
+          company: data.company,
+          phone: data.phone,
+          registeredAt: new Date().toISOString(),
+          ...(data.role === "vendor" ? { vendorServices: data.vendorServices } : {}),
+          ...(data.role === "user" ? { userPurpose: data.userPurpose } : {}),
+        };
+
+        // 3. Save Custom Data to Cloud Firestore
+        await setDoc(doc(db, "users", uid), userProfile);
+        
+        // onAuthStateChanged automatically logs them in here
+        return { success: true };
+      } catch (firestoreError: any) {
+         // ROLLBACK: Database failed, so delete the orphaned Identity
+         console.error("Firestore Save Error. Rolling back user creation.", firestoreError);
+         await firebaseUser.delete();
+         return { success: false, error: 'Database permissions error. Your account creation was safely rolled back.' };
+      }
+    } catch (err: any) {
+      console.error("Registration Error:", err);
+      return { success: false, error: err.message || 'Registration failed' };
     }
-
-    const { password: _, ...appUser } = found;
-    setUser(appUser);
-    saveSession(appUser);
-    return { success: true };
   };
 
-  const signOut = () => {
-    setUser(null);
-    saveSession(null);
+  const signOut = async () => {
+    try {
+      await firebaseSignOut(auth);
+      // onAuthStateChanged handles clearing state automatically
+    } catch (error) {
+       console.error("SignOut Error", error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, register, signOut, isAuthenticated: !!user }}>
-      {children}
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        signIn,
+        register,
+        signOut,
+      }}
+    >
+      {!isLoading && children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
