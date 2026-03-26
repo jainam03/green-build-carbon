@@ -24,7 +24,7 @@ export default function MethodologyPage() {
         
         {/* Cover Section */}
         <header className="border-b-2 border-slate-800 pb-8 mb-10">
-          <p className="text-emerald-700 font-bold tracking-widest uppercase text-xs mb-2">Veridian Enterprise Intelligence</p>
+          <p className="text-[#1e40af] font-bold tracking-widest uppercase text-xs mb-2">TraceCarbon Enterprise Intelligence</p>
           <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-4">
             LCA Methodology & Data Quality Protocol
           </h1>
@@ -148,7 +148,7 @@ export default function MethodologyPage() {
             </tbody>
           </table>
           
-          <p className="text-xs text-slate-500 italic mt-6 border-t pt-4">This document was generated live via the Veridian Scenario Simulator. Values represent algorithmic architecture, not formal audit certifications.</p>
+          <p className="text-xs text-slate-500 italic mt-6 border-t pt-4">This document was generated live via the TraceCarbon Scenario Simulator. Values represent algorithmic architecture, not formal audit certifications.</p>
         </section>
 
       </div>

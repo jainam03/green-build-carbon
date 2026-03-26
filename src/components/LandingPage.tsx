@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
+import { TraceCarbonLogo } from "@/components/ui/TraceCarbonLogo";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -48,10 +49,7 @@ const LandingPage = () => {
         <div className="flex justify-between items-center px-6 md:px-8 py-4 max-w-[1400px] mx-auto">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2.5 font-bold text-xl tracking-tighter">
-              <div className="w-7 h-7 bg-foreground rounded-[6px] flex items-center justify-center text-background text-xs font-extrabold shadow-sm">
-                V
-              </div>
-              <span className="text-foreground">VERIDIAN</span>
+              <TraceCarbonLogo className="scale-[0.85] origin-left" />
             </div>
             
             <div className="hidden md:flex">

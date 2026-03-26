@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { TraceCarbonLogo } from "@/components/ui/TraceCarbonLogo";
 
 type Tab = "signin" | "register";
 
@@ -63,11 +64,8 @@ const AuthPage = () => {
         <div className="absolute w-[600px] h-[600px] bg-accent/10 rounded-full blur-[120px] -bottom-40 -left-40 z-0 pointer-events-none" />
         
         <div className="relative z-10 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 font-bold text-2xl tracking-tighter hover:opacity-90 transition-opacity">
-            <div className="w-10 h-10 bg-accent rounded-[8px] flex items-center justify-center text-accent-foreground text-lg font-extrabold shadow-sm">
-              V
-            </div>
-            VERIDIAN
+          <Link to="/" className="hover:opacity-90 transition-opacity">
+            <TraceCarbonLogo showText={false} className="scale-125 origin-left" />
           </Link>
         </div>
 
@@ -110,11 +108,8 @@ const AuthPage = () => {
       <div className="flex-1 flex flex-col border-l border-border/40 bg-card overflow-y-auto w-full relative">
         {/* Mobile Header (Only visible on < lg screens) */}
         <div className="lg:hidden flex items-center justify-between p-6 border-b border-border/40 bg-background/95 sticky top-0 z-20">
-          <Link to="/" className="flex items-center gap-2 font-bold text-lg tracking-tighter">
-            <div className="w-7 h-7 bg-foreground rounded-[6px] flex items-center justify-center text-background text-xs font-extrabold">
-              V
-            </div>
-            VERIDIAN
+          <Link to="/" className="flex items-center">
+            <TraceCarbonLogo className="scale-75 origin-left" />
           </Link>
           <button onClick={() => navigate("/")} className="text-sm text-muted-foreground font-medium hover:text-foreground">
             Back to Home
@@ -477,7 +472,7 @@ function RegisterForm({
           </div>
         ) : (
           <div>
-             <p className="text-sm text-muted-foreground mb-4">What brings your organization to Veridian?</p>
+             <p className="text-sm text-muted-foreground mb-4">What brings your organization to TraceCarbon?</p>
              <select
                 value={userPurpose}
                 onChange={(e) => setUserPurpose(e.target.value)}

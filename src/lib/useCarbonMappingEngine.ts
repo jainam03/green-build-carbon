@@ -1,191 +1,174 @@
 import { useState, useMemo } from "react";
 
-export type DataQuality = "Measured" | "Estimated" | "Default";
-
-// DQ Multipliers: Lower quality = Higher penalty margin of error
-const DQ_FACTORS: Record<DataQuality, number> = {
-  "Measured": 1.0,
-  "Estimated": 1.15,
-  "Default": 1.30,
-};
-
-export interface QParam<T> {
-  value: T;
-  quality: DataQuality;
+// Simplified Project Inputs required by the Contractor
+export interface ContractorInputs {
+  // Basic Info
+  areaSqft: number;
+  demolitionType: "Manual" | "Semi-mechanical" | "Mechanical";
+  
+  // Material Composition sliders (sum to 100 is ideal, but handled loosely)
+  concretePercent: number;
+  steelPercent: number;
+  bricksPercent: number;
+  othersPercent: number;
+  
+  // Waste Handling
+  transportDistanceKm: number;
+  disposalType: "Dumping" | "Mixed" | "Recycling";
+  
+  // Activity Inputs (Fuel)
+  dieselLiters: number; // If 0, use qualitative category below
+  machineryUsage: "Low" | "Medium" | "High";
+  
+  // Compliance
+  rulesFollowed: "Yes" | "No" | "Not sure";
+  complianceType: "BMC guidelines" | "CPCB rules" | "Informal / none";
 }
 
-// Project level inputs that apply to both Baseline and Scenario
-export interface ProjectInputs {
-  builtUpArea: QParam<number>; // m2
-  floors: QParam<number>;
-  concretePercent: number; // 0-100
-  steelPercent: number; // 0-100
-  bricksPercent: number; // 0-100
-  othersPercent: number; // 0-100
-  materialDensity: QParam<number>; // kg/m2
+// Flat Impact LEDGER
+export interface ImpactLedger {
+  materialImpact: number;
+  machineImpact: number;
+  transportImpact: number;
+  processingImpact: number;
+  recyclingBenefit: number; 
+  totalEmissions: number;
+  isEstimated: boolean; // Flag to indicate if the 10% penalty was applied
 }
 
-export interface ScenarioInputs {
-  demolitionType: "Manual" | "Semi-mechanical" | "Mechanical"; // Maps to default fuel assumptions
-  transportDistance: QParam<number>; // km
-  processingType: "Landfill" | "Mixed" | "Recycling";
-  recyclingRate: QParam<number>; // %
-}
-
+// Methodology Factors (Hidden Backend Rigor)
 const FACTORS = {
+  materialDensity: 1400, // kg/m2 (default C&D assumption)
   material: {
     concrete: 0.12, // tCO2/ton
     steel: 2.15,
     bricks: 0.30,
     others: 0.05,
   },
-  demolitionFuel: {
-    "Manual": 0.5, // L/ton
-    "Semi-mechanical": 1.5,
-    "Mechanical": 3.0,
-  },
   fuelCarbon: 2.68, // kg CO2/L
+  // Defaults if exact diesel isn't provided (Liters per ton of waste)
+  defaultMachineryFuel: {
+    "Low": 0.5,
+    "Medium": 1.5,
+    "High": 3.0,
+  },
   transport: 0.10, // kg CO2/ton-km
   processing: {
-    "Landfill": 0.05, 
+    "Dumping": 0.05, 
     "Mixed": 0.03,
     "Recycling": 0.015,
   },
-  recoveryAvoidance: 0.50, // Avoided tCO2/ton
+  recoveryAvoidance: 0.50, // Avoided tCO2/ton when recycled
 };
 
-export interface FootprintLedger {
-  boundaries: {
-    // E_total = Σ(Q × EF × DQ) + Σ(Activity × EF × DQ) − Σ(Recovery × Avoided EF)
-    c1_demolition: number;
-    c2_transport: number;
-    c3_processing: number;
-    c4_disposal: number;
-    d_recovery: number; // Negative offset
-  };
-  scopes: {
-    scope1: number; // Direct Fuel (C1)
-    scope3: number; // Value Chain (C2, C3, C4)
-  };
-  netTotal: number;
-  dataQualityScore: number; // 0-100% confidence rating
-}
-
 export function useCarbonMappingEngine() {
-  const [projectInputs, setProjectInputs] = useState<ProjectInputs>({
-    builtUpArea: { value: 5000, quality: "Measured" },
-    floors: { value: 3, quality: "Measured" },
+  const [inputs, setInputs] = useState<ContractorInputs>({
+    areaSqft: 50000,
+    demolitionType: "Mechanical",
     concretePercent: 60,
     steelPercent: 15,
     bricksPercent: 15,
     othersPercent: 10,
-    materialDensity: { value: 1400, quality: "Default" },
+    transportDistanceKm: 45,
+    disposalType: "Dumping",
+    dieselLiters: 0,
+    machineryUsage: "High",
+    rulesFollowed: "No",
+    complianceType: "Informal / none",
   });
 
-  const [baselineScenario, setBaselineScenario] = useState<ScenarioInputs>({
-    demolitionType: "Mechanical",
-    transportDistance: { value: 45, quality: "Default" }, 
-    processingType: "Landfill",
-    recyclingRate: { value: 10, quality: "Default" }, 
-  });
+  const [simulationActive, setSimulationActive] = useState(false);
 
-  const [alternativeScenario, setAlternativeScenario] = useState<ScenarioInputs>({
-    demolitionType: "Semi-mechanical",
-    transportDistance: { value: 15, quality: "Estimated" }, 
-    processingType: "Recycling",
-    recyclingRate: { value: 85, quality: "Estimated" }, 
-  });
+  // The core calculation logic abstracted
+  const calculateImpact = (data: ContractorInputs): ImpactLedger => {
+    // 1. Estimate total mass (Area x Density). Convert sqft to sqm first (1 sqm = 10.7639 sqft)
+    const areaSqm = data.areaSqft / 10.7639;
+    const totalMassTons = (areaSqm * FACTORS.materialDensity) / 1000;
 
-  const calculateLedger = (proj: ProjectInputs, scen: ScenarioInputs): FootprintLedger => {
-    // Step 1: Material Quantification w/ DQ
-    // We blend the DQ factors of the core structural variables to find the mass DQ multiplier
-    const massDQ = (DQ_FACTORS[proj.builtUpArea.quality] + 
-                    DQ_FACTORS[proj.floors.quality] + 
-                    DQ_FACTORS[proj.materialDensity.quality]) / 3;
-    
-    const baseTons = (proj.builtUpArea.value * proj.floors.value * proj.materialDensity.value) / 1000;
-    const totalMassTons = baseTons * massDQ; // Uncertainty increases mass estimation defensively
+    // Split materials
+    const qCon = totalMassTons * (data.concretePercent / 100);
+    const qSteel = totalMassTons * (data.steelPercent / 100);
+    const qBricks = totalMassTons * (data.bricksPercent / 100);
+    const qOthers = totalMassTons * (data.othersPercent / 100);
 
-    // ISO Boundary C1: Demolition (Scope 1)
-    const fuelLiters = totalMassTons * FACTORS.demolitionFuel[scen.demolitionType];
-    const c1_demo = (fuelLiters * FACTORS.fuelCarbon) / 1000; 
+    // Material Impact
+    const materialImpact = 
+      (qCon * FACTORS.material.concrete) + 
+      (qSteel * FACTORS.material.steel) + 
+      (qBricks * FACTORS.material.bricks) + 
+      (qOthers * FACTORS.material.others);
 
-    // ISO Boundary C2: Transport (Scope 3)
-    const transportDQ = DQ_FACTORS[scen.transportDistance.quality];
-    const c2_transport = ((scen.transportDistance.value * transportDQ) * totalMassTons * FACTORS.transport) / 1000; 
-
-    // ISO Boundary C3 & C4: Processing & Disposal (Scope 3)
-    // If landfill -> C4. If recycling/mixed -> C3.
-    let c3_processing = 0;
-    let c4_disposal = 0;
-    const eProc = totalMassTons * FACTORS.processing[scen.processingType];
-    
-    if (scen.processingType === "Landfill") {
-      c4_disposal = eProc; // Unregulated C4
+    // 2. Machine Impact (Diesel)
+    let machineImpact = 0;
+    let isEstimated = false;
+    if (data.dieselLiters > 0) {
+      machineImpact = (data.dieselLiters * FACTORS.fuelCarbon) / 1000;
     } else {
-      c3_processing = eProc; // Regulated C3 Processing
+      // User didn't track fuel accurately. Use default + exact 10% penalty later on total.
+      const fuelLiters = totalMassTons * FACTORS.defaultMachineryFuel[data.machineryUsage];
+      machineImpact = (fuelLiters * FACTORS.fuelCarbon) / 1000;
+      isEstimated = true;
     }
 
-    // ISO Module D: Recovery & Benefits (Outside System Boundary Offset)
-    const recycleDQ = DQ_FACTORS[scen.recyclingRate.quality];
-    // Recycling rate shouldn't be penalized by DQ, but rather scaled safely. If it's a default assumption, we assume LESS recycling.
-    // Inverse DQ for benefits: A high DQ factor (1.30) means we should divide the benefit to safely underestimate it.
-    const safeRecyclingRate = (scen.recyclingRate.value / recycleDQ) / 100;
-    
-    const recycledTons = totalMassTons * safeRecyclingRate;
-    const d_recovery = recycledTons * FACTORS.recoveryAvoidance; // tCO2 Avoided
+    // 3. Transport Impact
+    const transportImpact = (data.transportDistanceKm * totalMassTons * FACTORS.transport) / 1000;
 
-    const netTotal = c1_demo + c2_transport + c3_processing + c4_disposal - d_recovery;
+    // 4. Processing Impact
+    const processingImpact = totalMassTons * FACTORS.processing[data.disposalType];
 
-    // Calculate overall Confidence Score (0-100) based on DQ inputs
-    const avgDQFactor = (massDQ + transportDQ + recycleDQ) / 3;
-    // Factor 1.0 = 100%, 1.15 = 50% confidence, 1.30 = 0% confidence
-    const confidenceScore = Math.max(0, Math.min(100, (1.30 - avgDQFactor) * (100 / 0.30)));
+    // 5. Recycling Benefit
+    let recyclingBenefit = 0;
+    if (data.disposalType === "Recycling") {
+      // Assume 80% recovery at true recycling plant
+      recyclingBenefit = (totalMassTons * 0.80) * FACTORS.recoveryAvoidance;
+    } else if (data.disposalType === "Mixed") {
+      // Assume 30% recovery at mixed MRF
+      recyclingBenefit = (totalMassTons * 0.30) * FACTORS.recoveryAvoidance;
+    }
+
+    // 6. Data Quality Adjustment (The 10% penalty for unmeasured fuel/estimates)
+    let rawTotal = materialImpact + machineImpact + transportImpact + processingImpact - recyclingBenefit;
+    if (isEstimated) {
+      rawTotal = rawTotal * 1.10; // Apply 10% adjustment penalty
+    }
 
     return {
-      boundaries: {
-        c1_demolition: c1_demo,
-        c2_transport: c2_transport,
-        c3_processing: c3_processing,
-        c4_disposal: c4_disposal,
-        d_recovery: -d_recovery, // Displayed heavily negative
-      },
-      scopes: {
-        scope1: c1_demo,
-        scope3: c2_transport + c3_processing + c4_disposal,
-      },
-      netTotal,
-      dataQualityScore: confidenceScore,
+      materialImpact,
+      machineImpact,
+      transportImpact,
+      processingImpact,
+      recyclingBenefit,
+      totalEmissions: Math.max(0, rawTotal),
+      isEstimated
     };
   };
 
-  const results = useMemo(() => {
-    const baseline = calculateLedger(projectInputs, baselineScenario);
-    const alternative = calculateLedger(projectInputs, alternativeScenario);
+  const currentImpact = useMemo(() => calculateImpact(inputs), [inputs]);
 
-    const netSavings = baseline.netTotal - alternative.netTotal;
-    const savingsPercent = (netSavings / baseline.netTotal) * 100;
-    
-    // Core baseline mass without DQ penalty for standard display
-    const totalWasteTons = (projectInputs.builtUpArea.value * projectInputs.floors.value * projectInputs.materialDensity.value) / 1000;
+  // Simulated "What if I improve this?" Baseline (Lower transport, exact fuel, recycling)
+  const simulatedImpact = useMemo(() => {
+    return calculateImpact({
+      ...inputs,
+      transportDistanceKm: Math.min(10, inputs.transportDistanceKm * 0.5), // Shorten route
+      disposalType: "Recycling", // Force circularity
+      // Assuming they measure diesel if they are optimizing
+      dieselLiters: inputs.dieselLiters > 0 ? inputs.dieselLiters * 0.8 : 0, 
+      machineryUsage: "Low", // Optimize machinery runtimes
+    });
+  }, [inputs]);
 
-    return {
-      baseline,
-      alternative,
-      netSavings,
-      savingsPercent,
-      totalWasteTons
-    };
-  }, [projectInputs, baselineScenario, alternativeScenario]);
+  const toggleSimulation = () => setSimulationActive(!simulationActive);
+
+  // Expose active view depending on simulation state
+  const activeImpact = simulationActive ? simulatedImpact : currentImpact;
 
   return {
-    projectInputs,
-    setProjectInputs,
-    baselineScenario,
-    setBaselineScenario,
-    alternativeScenario,
-    setAlternativeScenario,
-    results,
-    factors: FACTORS,
+    inputs,
+    setInputs,
+    currentImpact,
+    simulatedImpact,
+    activeImpact,
+    simulationActive,
+    toggleSimulation
   };
 }

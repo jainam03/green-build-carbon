@@ -20,6 +20,7 @@ import {
   Target,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { TraceCarbonLogo } from "@/components/ui/TraceCarbonLogo";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -112,10 +113,7 @@ const ProfilePage = () => {
       <nav className="flex justify-between items-center px-6 md:px-8 py-5 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center gap-2.5 font-bold text-xl tracking-tighter">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-accent rounded-button flex items-center justify-center text-accent-foreground text-sm font-extrabold shadow-sm">
-              V
-            </div>
-            <span>VERIDIAN</span>
+            <TraceCarbonLogo />
           </div>
         </div>
         <button
@@ -223,10 +221,10 @@ const ProfilePage = () => {
             <h3 className="font-bold text-lg mb-1">
               {user.role === "vendor" ? "Platform Market Overview" : "Available Platform Services"}
             </h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
+              <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
               {user.role === "vendor"
                 ? "Connecting contractors with sustainable vendors. See where your services fit in the ecosystem."
-                : "Explore the different capabilities on Veridian tailored to reduce your structural emissions."}
+                : "Explore the different capabilities on TraceCarbon tailored to reduce your structural emissions."}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {services.map((s, i) => (
