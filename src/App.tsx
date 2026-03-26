@@ -8,6 +8,7 @@ import LandingPage from "@/components/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
 import DashboardPage from "@/components/DashboardPage";
+import MethodologyPage from "@/pages/MethodologyPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import NotFound from "@/pages/NotFound";
 
@@ -36,6 +37,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/methodology"
+              element={
+                <ProtectedRoute>
+                  <MethodologyPage />
                 </ProtectedRoute>
               }
             />

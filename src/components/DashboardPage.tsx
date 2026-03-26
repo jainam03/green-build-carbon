@@ -364,8 +364,13 @@ export default function DashboardPage() {
                   <Globe className="w-8 h-8 text-slate-700"/>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-800 mb-1 leading-tight">Enterprise Compliance & Frameworks</p>
-                  <p className="text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-md inline-block border border-emerald-100">
+                  <p className="text-sm font-bold text-slate-800 mb-1 leading-tight flex items-center gap-2">
+                    Enterprise Compliance & Frameworks
+                    <Link to="/methodology" className="ml-2 text-[10px] text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-600 px-2 py-0.5 rounded transition">
+                      View Methodology Protocol &rarr;
+                    </Link>
+                  </p>
+                  <p className="text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-md inline-block border border-emerald-100 mt-1">
                     “This tool is aligned with ISO 14040/14044, GHG Protocol, and GRI 305 for lifecycle-based carbon estimation.”
                   </p>
                 </div>

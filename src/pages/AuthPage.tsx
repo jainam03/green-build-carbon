@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   ShieldCheck,
   BarChart3,
-  Leaf
+  Leaf,
+  Loader2
 } from "lucide-react";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +42,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { signIn, register, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -167,8 +169,11 @@ const AuthPage = () => {
                   transition={{ duration: 0.25 }}
                 >
                   <SignInForm
+                    isLoading={isLoading}
                     onSignIn={async (email, password) => {
+                      setIsLoading(true);
                       const result = await signIn(email, password);
+                      setIsLoading(false);
                       if (result.success) {
                         toast({ title: "Welcome back!", description: "You've been signed in successfully." });
                         navigate("/profile");
@@ -188,8 +193,11 @@ const AuthPage = () => {
                   transition={{ duration: 0.25 }}
                 >
                   <RegisterForm
+                    isLoading={isLoading}
                     onRegister={async (data) => {
+                      setIsLoading(true);
                       const result = await register(data);
+                      setIsLoading(false);
                       if (result.success) {
                         toast({ title: "Registration successful!", description: "Please sign in with your credentials." });
                         setActiveTab("signin");
@@ -211,9 +219,11 @@ const AuthPage = () => {
 
 /* ─── Sign In Form ─── */
 function SignInForm({
+  isLoading,
   onSignIn,
   onSwitchToRegister,
 }: {
+  isLoading?: boolean;
   onSignIn: (email: string, password: string) => void;
   onSwitchToRegister: () => void;
 }) {
@@ -268,9 +278,11 @@ function SignInForm({
 
       <button
         type="submit"
-        className="w-full bg-foreground text-background py-3.5 rounded-[8px] font-semibold hover:bg-foreground/90 transition-all active:scale-[0.98] shadow-sm mt-8 text-base"
+        disabled={isLoading}
+        className="w-full bg-foreground text-background py-3.5 rounded-[8px] font-semibold hover:bg-foreground/90 transition-all active:scale-[0.98] shadow-sm mt-8 text-base disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        Sign In to Platform
+        {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
+        {isLoading ? "Authenticating..." : "Sign In to Platform"}
       </button>
 
       <p className="text-center text-sm text-muted-foreground mt-8">
@@ -285,9 +297,11 @@ function SignInForm({
 
 /* ─── Register Form (Wide Layout) ─── */
 function RegisterForm({
+  isLoading,
   onRegister,
   onSwitchToSignIn,
 }: {
+  isLoading?: boolean;
   onRegister: (data: {
     email: string;
     name: string;
@@ -522,9 +536,11 @@ function RegisterForm({
       <div className="pt-4">
         <button
           type="submit"
-          className="w-full bg-foreground text-background py-4 rounded-[8px] font-semibold hover:bg-foreground/90 transition-all active:scale-[0.98] shadow-md text-base"
+          disabled={isLoading}
+          className="w-full bg-foreground text-background py-4 rounded-[8px] font-semibold hover:bg-foreground/90 transition-all active:scale-[0.98] shadow-md text-base disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Create Enterprise Account
+          {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
+          {isLoading ? "Processing Data..." : "Create Enterprise Account"}
         </button>
       </div>
 
