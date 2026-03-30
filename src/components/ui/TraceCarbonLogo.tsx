@@ -7,11 +7,16 @@ export function TraceCarbonLogo({ className = "", showText = true }: { className
         This img tag points to the new logo. 
         Please place the logo file you shared in the 'public/' directory and name it 'logo.png' 
       */}
-      <img 
-        src="/logo.png" 
-        alt="TraceCarbon" 
-        className={`max-h-[48px] w-auto shrink-0 object-contain`} 
-      />
+      {/* We wrap the logo in a clean white rounded pill to make the white background of the image look intentional and polished even on dark pages. */}
+      <div className="bg-white rounded-2xl flex items-center justify-center px-4 py-2 shadow-sm border border-slate-100/50">
+        <img 
+          src="/logo.png" 
+          alt="TraceCarbon" 
+          // We increased the base height and used a clever mix-blend trick 
+          // to make the image's white background merge perfectly with the wrapper.
+          className="h-[45px] sm:h-[60px] w-auto shrink-0 object-contain mix-blend-multiply scale-[1.2]" 
+        />
+      </div>
 
       {/* 
         NOTE: Since your new logo image already includes the "TraceCarbon" text and the 
