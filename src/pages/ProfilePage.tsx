@@ -18,6 +18,9 @@ import {
   PackageSearch,
   BadgeDollarSign,
   Target,
+  BookOpen,
+  Download,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { TraceCarbonLogo } from "@/components/ui/TraceCarbonLogo";
@@ -107,6 +110,31 @@ const ProfilePage = () => {
     { icon: Shield, label: "Role", value: roleLabel },
   ];
 
+  // Quick action cards (Nielsen H6: Recognition rather than recall)
+  const quickActions = [
+    {
+      icon: BarChart3,
+      title: "Open Dashboard",
+      desc: "Continue analyzing your carbon data",
+      action: () => navigate("/dashboard"),
+      color: "text-emerald-600 bg-emerald-50 border-emerald-200",
+    },
+    {
+      icon: BookOpen,
+      title: "View Methodology",
+      desc: "LCA formulas and data quality explained",
+      action: () => navigate("/methodology"),
+      color: "text-blue-600 bg-blue-50 border-blue-200",
+    },
+    {
+      icon: Download,
+      title: "Export Report",
+      desc: "Download your carbon assessment",
+      action: () => navigate("/methodology"), // Redirects to methodology page with print option
+      color: "text-purple-600 bg-purple-50 border-purple-200",
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -150,6 +178,25 @@ const ProfilePage = () => {
                 ? "Manage your vendor profile, view your service offerings, and access our dashboard tools."
                 : "Manage your profile, set your sustainability goals, and track your construction waste carbon footprint."}
             </p>
+          </motion.div>
+
+          {/* Quick Actions (Nielsen H6: Recognition — common tasks at a glance) */}
+          <motion.div variants={fadeUp} custom={0.5} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            {quickActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={action.action}
+                className={`flex items-start gap-3 p-4 rounded-xl border transition-all hover:shadow-md text-left group ${action.color}`}
+              >
+                <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center shrink-0 shadow-sm border border-current/10">
+                  <action.icon size={18} />
+                </div>
+                <div>
+                  <p className="font-bold text-sm mb-0.5 group-hover:underline">{action.title}</p>
+                  <p className="text-[11px] opacity-70 leading-snug">{action.desc}</p>
+                </div>
+              </button>
+            ))}
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mb-10">

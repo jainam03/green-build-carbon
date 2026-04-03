@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   BarChart3,
   Leaf,
-  Loader2
+  Loader2,
+  Check,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -173,7 +176,7 @@ const AuthPage = () => {
                         toast({ title: "Welcome back!", description: "You've been signed in successfully." });
                         navigate("/profile");
                       } else {
-                        toast({ title: "Sign in failed", description: result.error, variant: "destructive" });
+                        toast({ title: "Sign in failed", description: friendlyAuthError(result.error), variant: "destructive" });
                       }
                     }}
                     onSwitchToRegister={() => setActiveTab("register")}
@@ -197,7 +200,7 @@ const AuthPage = () => {
                         toast({ title: "Registration successful!", description: "Please sign in with your credentials." });
                         setActiveTab("signin");
                       } else {
-                        toast({ title: "Registration failed", description: result.error, variant: "destructive" });
+                        toast({ title: "Registration failed", description: friendlyAuthError(result.error), variant: "destructive" });
                       }
                     }}
                     onSwitchToSignIn={() => setActiveTab("signin")}
@@ -212,6 +215,102 @@ const AuthPage = () => {
   );
 };
 
+/* ─── Shneiderman R5: Friendly error messages (replace Firebase jargon) ─── */
+function friendlyAuthError(error?: string): string {
+  if (!error) return "An unexpected error occurred. Please try again.";
+  if (error.includes("auth/user-not-found") || error.includes("auth/wrong-password") || error.includes("auth/invalid-credential"))
+    return "Invalid email or password. Please check your credentials and try again.";
+  if (error.includes("auth/email-already-in-use"))
+    return "An account with this email already exists. Try signing in instead.";
+  if (error.includes("auth/weak-password"))
+    return "Password is too weak. Please use at least 6 characters.";
+  if (error.includes("auth/invalid-email"))
+    return "Please enter a valid email address.";
+  if (error.includes("auth/too-many-requests"))
+    return "Too many attempts. Please wait a moment and try again.";
+  if (error.includes("auth/network-request-failed"))
+    return "Network error. Please check your internet connection.";
+  if (error.includes("permission"))
+    return "Database permissions error. Your account creation was safely rolled back.";
+  return error;
+}
+
+/* ─── Password Strength Indicator (Nielsen H1: System status) ─── */
+function PasswordStrength({ password }: { password: string }) {
+  const strength = useMemo(() => {
+    if (!password) return { level: 0, label: "", color: "" };
+    let score = 0;
+    if (password.length >= 6) score++;
+    if (password.length >= 10) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    if (score <= 1) return { level: 1, label: "Weak", color: "bg-red-500" };
+    if (score <= 3) return { level: 2, label: "Medium", color: "bg-amber-500" };
+    return { level: 3, label: "Strong", color: "bg-emerald-500" };
+  }, [password]);
+
+  if (!password) return null;
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex gap-1">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+              i <= strength.level ? strength.color : "bg-border"
+            }`}
+          />
+        ))}
+      </div>
+      <p className={`text-[11px] font-semibold ${
+        strength.level === 1 ? "text-red-600" : strength.level === 2 ? "text-amber-600" : "text-emerald-600"
+      }`}>
+        {strength.label} password
+      </p>
+    </div>
+  );
+}
+
+/* ─── Password Requirements Checklist (Nielsen H5: Error prevention) ─── */
+function PasswordChecklist({ password, confirmPassword }: { password: string; confirmPassword: string }) {
+  if (!password) return null;
+
+  const checks = [
+    { met: password.length >= 6, label: "At least 6 characters" },
+    { met: /[A-Z]/.test(password), label: "Contains uppercase letter" },
+    { met: /[0-9]/.test(password), label: "Contains a number" },
+    ...(confirmPassword ? [{ met: password === confirmPassword && confirmPassword.length > 0, label: "Passwords match" }] : []),
+  ];
+
+  return (
+    <div className="mt-3 space-y-1">
+      {checks.map((check, i) => (
+        <div key={i} className="flex items-center gap-2 text-[11px] font-medium">
+          {check.met ? (
+            <Check className="w-3 h-3 text-emerald-500" />
+          ) : (
+            <X className="w-3 h-3 text-slate-300" />
+          )}
+          <span className={check.met ? "text-emerald-600" : "text-muted-foreground"}>{check.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Inline Field Error (Nielsen H9: in-context errors) ─── */
+function InlineError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold text-red-600 mt-1.5">
+      <AlertCircle className="w-3 h-3 shrink-0" /> {message}
+    </p>
+  );
+}
+
 /* ─── Sign In Form ─── */
 function SignInForm({
   isLoading,
@@ -225,14 +324,36 @@ function SignInForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [formError, setFormError] = useState("");
+
+  // Nielsen H5: Real-time inline validation
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const emailError = touched.email && email && !emailValid ? "Please enter a valid email address" : undefined;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    if (!emailValid) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setFormError("Password must be at least 6 characters.");
+      return;
+    }
     onSignIn(email, password);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Nielsen H9: Form-level error banner */}
+      {formError && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm font-semibold text-red-700">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
+        </div>
+      )}
+
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-foreground mb-2 block">Work Email</label>
@@ -241,15 +362,21 @@ function SignInForm({
             type="email"
             placeholder="you@company.com"
             value={email}
-            onChange={setEmail}
+            onChange={(v) => { setEmail(v); setFormError(""); }}
+            onBlur={() => setTouched({ ...touched, email: true })}
             required
+            hasError={!!emailError}
           />
+          <InlineError message={emailError} />
         </div>
 
         <div>
           <label className="text-sm font-semibold text-foreground mb-2 block flex justify-between">
             <span>Password</span>
-            <span className="text-accent cursor-pointer hover:underline font-medium">Forgot password?</span>
+            <span className="text-accent cursor-pointer hover:underline font-medium" onClick={() => {
+              // Nielsen H10: Contextual help
+              alert("Password reset is coming soon. For now, please contact support.");
+            }}>Forgot password?</span>
           </label>
           <div className="relative">
             <InputWithIcon
@@ -257,13 +384,14 @@ function SignInForm({
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
               value={password}
-              onChange={setPassword}
+              onChange={(v) => { setPassword(v); setFormError(""); }}
               required
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
@@ -320,27 +448,47 @@ function RegisterForm({
   
   const [vendorServices, setVendorServices] = useState<string[]>([]);
   const [userPurpose, setUserPurpose] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [formError, setFormError] = useState("");
 
   const { toast } = useToast();
 
+  // Nielsen H5: Real-time validation
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const emailError = touched.email && email && !emailValid ? "Please enter a valid email address" : undefined;
+  const passwordMismatch = touched.confirmPassword && confirmPassword && password !== confirmPassword ? "Passwords do not match" : undefined;
+
+  // Nielsen H1: Multi-step registration progress (Step 1/3, 2/3, 3/3)
+  const regSteps = useMemo(() => [
+    { label: "Role", complete: true }, // always complete (default selected)
+    { label: "Details", complete: !!name && !!email && emailValid && !!company && !!phone },
+    { label: "Security", complete: password.length >= 6 && password === confirmPassword && confirmPassword.length > 0 },
+  ], [name, email, emailValid, company, phone, password, confirmPassword]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+
+    if (!emailValid) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
     if (password !== confirmPassword) {
-      toast({ title: "Passwords don't match", description: "Please make sure both passwords are identical.", variant: "destructive" });
+      setFormError("Passwords don't match. Please make sure both passwords are identical.");
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Password too short", description: "Password must be at least 6 characters.", variant: "destructive" });
+      setFormError("Password must be at least 6 characters.");
       return;
     }
 
     if (role === "vendor" && vendorServices.length === 0) {
-      toast({ title: "Select services", description: "Please select at least one service you offer.", variant: "destructive" });
+      setFormError("Please select at least one service you offer.");
       return;
     }
 
     if (role === "user" && !userPurpose) {
-      toast({ title: "Select a purpose", description: "Please let us know your primary goal.", variant: "destructive" });
+      setFormError("Please let us know your primary goal.");
       return;
     }
 
@@ -358,7 +506,35 @@ function RegisterForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Nielsen H9: Form-level error banner */}
+      {formError && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm font-semibold text-red-700 animate-in fade-in duration-200">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
+        </div>
+      )}
       
+      {/* Nielsen H1: Registration Step Progress Indicator */}
+      <div className="flex items-center gap-2 mb-2">
+        {regSteps.map((step, i) => (
+          <div key={i} className="flex items-center gap-2">
+            {i > 0 && (
+              <div className={`w-8 h-px transition-colors ${regSteps[i - 1].complete ? "bg-accent" : "bg-border"}`} />
+            )}
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all duration-300 ${
+              step.complete
+                ? "bg-emerald-bg text-emerald-deep border border-emerald-deep/20"
+                : "bg-secondary text-muted-foreground border border-border"
+            }`}>
+              {step.complete ? <Check className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">{i + 1}</span>}
+              {step.label}
+            </div>
+          </div>
+        ))}
+        <span className="ml-auto text-[11px] font-bold text-muted-foreground">
+          {regSteps.filter(s => s.complete).length}/{regSteps.length}
+        </span>
+      </div>
+
       {/* Role Selection section (Big prominence) */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">Select Primary Role</label>
@@ -371,6 +547,7 @@ function RegisterForm({
             onClick={() => {
               setRole("user");
               setVendorServices([]); 
+              setFormError("");
             }}
           />
           <RoleButton
@@ -381,6 +558,7 @@ function RegisterForm({
             onClick={() => {
               setRole("vendor");
               setUserPurpose(""); 
+              setFormError("");
             }}
           />
         </div>
@@ -410,9 +588,12 @@ function RegisterForm({
                type="email"
                placeholder="jane@company.com"
                value={email}
-               onChange={setEmail}
+               onChange={(v) => { setEmail(v); setFormError(""); }}
+               onBlur={() => setTouched({ ...touched, email: true })}
                required
+               hasError={!!emailError}
              />
+             <InlineError message={emailError} />
            </div>
          </div>
 
@@ -463,6 +644,7 @@ function RegisterForm({
                     onChange={(e) => {
                       if (e.target.checked) setVendorServices([...vendorServices, service]);
                       else setVendorServices(vendorServices.filter((s) => s !== service));
+                      setFormError("");
                     }}
                   />
                   <span className="text-sm font-medium text-foreground">{service}</span>
@@ -475,7 +657,7 @@ function RegisterForm({
              <p className="text-sm text-muted-foreground mb-4">What brings your organization to TraceCarbon?</p>
              <select
                 value={userPurpose}
-                onChange={(e) => setUserPurpose(e.target.value)}
+                onChange={(e) => { setUserPurpose(e.target.value); setFormError(""); }}
                 className="w-full p-3.5 rounded-[8px] border border-border bg-background focus:ring-2 focus:ring-accent/40 outline-none text-sm transition-all appearance-none font-medium cursor-pointer shadow-sm"
                 required
              >
@@ -502,17 +684,20 @@ function RegisterForm({
                 type={showPassword ? "text" : "password"}
                 placeholder="Min 6 characters"
                 value={password}
-                onChange={setPassword}
+                onChange={(v) => { setPassword(v); setFormError(""); }}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            {/* Nielsen H1: Password strength indicator */}
+            <PasswordStrength password={password} />
           </div>
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Confirm Password</label>
@@ -521,11 +706,16 @@ function RegisterForm({
               type={showPassword ? "text" : "password"}
               placeholder="Match password"
               value={confirmPassword}
-              onChange={setConfirmPassword}
+              onChange={(v) => { setConfirmPassword(v); setFormError(""); }}
+              onBlur={() => setTouched({ ...touched, confirmPassword: true })}
               required
+              hasError={!!passwordMismatch}
             />
+            <InlineError message={passwordMismatch} />
           </div>
         </div>
+        {/* Nielsen H5: Password requirements checklist */}
+        <PasswordChecklist password={password} confirmPassword={confirmPassword} />
       </div>
 
       <div className="pt-4">
@@ -571,14 +761,18 @@ function InputWithIcon({
   placeholder,
   value,
   onChange,
+  onBlur,
   required,
+  hasError,
 }: {
   icon: React.ReactNode;
   type: string;
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   required?: boolean;
+  hasError?: boolean;
 }) {
   return (
     <div className="relative">
@@ -588,8 +782,13 @@ function InputWithIcon({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         required={required}
-        className="w-full pl-11 pr-4 py-3.5 rounded-[8px] border border-border bg-background focus:ring-2 focus:ring-accent/40 outline-none transition-all text-sm shadow-sm placeholder:text-muted-foreground/60"
+        className={`w-full pl-11 pr-4 py-3.5 rounded-[8px] border bg-background focus:ring-2 outline-none transition-all text-sm shadow-sm placeholder:text-muted-foreground/60 ${
+          hasError
+            ? "border-red-300 focus:ring-red-200 bg-red-50/30"
+            : "border-border focus:ring-accent/40"
+        }`}
       />
     </div>
   );
