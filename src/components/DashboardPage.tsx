@@ -11,7 +11,9 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line
 } from "recharts";
 import { AlertCircle, Gauge, Leaf, LayoutDashboard, Truck, Settings, Sparkles, CheckCircle, PlusCircle, Calendar, Trash2, Info } from "lucide-react";
 import { useCarbonMappingEngine, ActivityLog } from "@/lib/useCarbonMappingEngine";
@@ -36,23 +38,24 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardPage() {
   const { user, signOut } = useAuth();
   
-  // Use Simplified Contractor Engine
+  // Use Firestore-Synced Engine
   const { 
     projectInputs, 
     setProjectInputs, 
     activityLogs,
-    setActivityLogs,
+    addActivityLog,
+    deleteActivityLog,
     activeImpact,
     currentImpact,
     simulatedImpact,
     simulationActive,
-    toggleSimulation
-  } = useCarbonMappingEngine();
+    toggleSimulation,
+    isLoading
+  } = useCarbonMappingEngine(user?.id);
 
   // Modal State for New Activity Log
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [newLog, setNewLog] = useState<ActivityLog>({
-    id: "",
+  const [newLog, setNewLog] = useState<Omit<ActivityLog, 'id'>>({
     date: new Date().toISOString().split("T")[0],
     dieselLiters: 0,
     machineryUsage: "Medium",
@@ -60,6 +63,15 @@ export default function DashboardPage() {
     disposalType: "Mixed",
     truckLoads: 1,
   });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+        <p className="font-semibold text-lg">Syncing Project Data...</p>
+      </div>
+    );
+  }
 
   // Pie Chart Data (Dynamic to Simulation)
   const breakdownData = [
@@ -118,9 +130,9 @@ export default function DashboardPage() {
                    <option value="Semi-mechanical">Semi-mechanical</option>
                    <option value="Manual">Manual</option>
                  </select>
-                 <p className="text-[10px] text-slate-500 flex items-start gap-1">
+                   <p className="text-[10px] text-slate-500 flex items-start gap-1">
                    <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                   Scales the machinery fuel estimator. Manual demolition generates ~80% less machine fuel emissions than Mechanical.
+                   Provides the baseline for the 'Fuel' variable in the carbon formula when daily fuel isn't tracked exactly. Manual lowers the estimate by 80%.
                  </p>
                </div>
             </div>
@@ -174,7 +186,7 @@ export default function DashboardPage() {
                </h2>
                <button 
                  onClick={() => {
-                   setNewLog({...newLog, id: Date.now().toString(), date: new Date().toISOString().split("T")[0]});
+                   setNewLog({...newLog, date: new Date().toISOString().split("T")[0]});
                    setIsLogModalOpen(true);
                  }}
                  className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-md transition border border-amber-200"
@@ -196,7 +208,7 @@ export default function DashboardPage() {
                              <span className="text-sm font-bold text-slate-700">{log.date}</span>
                           </div>
                           <button 
-                             onClick={() => setActivityLogs(activityLogs.filter(l => l.id !== log.id))}
+                             onClick={() => deleteActivityLog(log.id)}
                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition bg-white rounded-md p-1 border border-slate-200 shadow-sm"
                              title="Delete Log"
                           >
@@ -248,7 +260,7 @@ export default function DashboardPage() {
                )}
                <p className="text-[10px] text-slate-500 flex items-start gap-1">
                  <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                 Ignored rules or informal demolition applies a 5% data quality penalty to your total emissions count due to fugitive leaks.
+                 Ignorance of rules applies a strict 5% Data Quality (DQ) penalty to Material & Processing emissions due to unrecorded fugitive dust/leaks.
                </p>
             </div>
           </div>
@@ -275,13 +287,13 @@ export default function DashboardPage() {
                    </span>
                  )}
                  {simulationActive && (
-                   <span className="inline-block bg-white text-emerald-800 px-3 py-1 rounded-full text-sm font-bold animate-pulse shadow-lg">
-                     Simulation Active: You saved {Math.round(currentImpact.totalEmissions - simulatedImpact.totalEmissions).toLocaleString()} tons!
+                   <span className="inline-block bg-white text-emerald-800 px-3 py-1 rounded-sm text-xs font-bold shadow-lg max-w-sm leading-tight">
+                     Optimized Workflow: Saved {Math.round(currentImpact.totalEmissions - simulatedImpact.totalEmissions).toLocaleString()} tons by assuming perfect compliance (DQ=1.0), exact fuel tracking, and routing 100% of waste to Recycling.
                    </span>
                  )}
                  {activeImpact.compliancePenalty > 0 && !simulationActive && (
                    <span className="inline-block bg-red-500/20 text-red-200 border border-red-500/30 px-3 py-1 rounded text-xs font-semibold">
-                     Includes {Math.round(activeImpact.compliancePenalty)}t non-compliance penalty
+                     Includes {Math.round(activeImpact.compliancePenalty)}t non-compliance DQ penalty
                    </span>
                  )}
                </div>
@@ -301,19 +313,19 @@ export default function DashboardPage() {
              </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
              {/* Charts: Emission Breakdown */}
-             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center">
+             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center h-[380px]">
                 <h3 className="font-bold text-slate-800 text-lg mb-2 self-start flex gap-2 items-center">
                   Emission Breakdown
                 </h3>
                 {activityLogs.length === 0 ? (
-                  <div className="w-full h-[250px] flex items-center justify-center">
+                  <div className="w-full flex-1 flex items-center justify-center">
                     <p className="text-sm font-medium text-slate-400 text-center px-8 border border-dashed border-slate-200 p-4 rounded-xl">Add activity logs to see forecasted breakdown.</p>
                   </div>
                 ) : (
                   <>
-                    <div className="w-full h-[250px]">
+                    <div className="w-full h-[220px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -334,12 +346,12 @@ export default function DashboardPage() {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="grid grid-cols-2 w-full gap-2 mt-2">
+                    <div className="grid grid-cols-2 w-full gap-2 mt-4">
                        {breakdownData.map((entry, idx) => {
                          const totalSum = breakdownData[0].value + breakdownData[1].value + breakdownData[2].value;
                          const percent = totalSum > 0 ? ((entry.value / totalSum) * 100).toFixed(0) : "0";
                          return (
-                           <div key={idx} className="flex items-center gap-2 text-sm text-slate-600 font-medium bg-slate-50 p-2 rounded border border-slate-100">
+                           <div key={idx} className="flex items-center gap-2 text-xs text-slate-600 font-medium bg-slate-50 p-2 rounded border border-slate-100">
                              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx] }}></span>
                              <span className="truncate">{percent}% {entry.name.replace(" Impact", "")}</span>
                            </div>
@@ -350,22 +362,46 @@ export default function DashboardPage() {
                 )}
              </div>
 
-             {/* Auto-Insights (Static Cards) */}
-             <div className="flex flex-col gap-4">
-                <div className="bg-blue-50/50 p-4 border border-blue-100 rounded-xl hover:shadow-md transition">
-                  <h4 className="font-bold text-blue-900 border-b border-blue-200 pb-2 mb-2 text-sm">Timeline Forecasting</h4>
-                  <p className="text-sm text-blue-800">Your total score actively scales up based on the efficiency of your logs. Small daily emissions from transport compound enormously over large projects.</p>
-                </div>
-                
-                <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-xl hover:shadow-md transition">
-                  <h4 className="font-bold text-emerald-900 border-b border-emerald-200 pb-2 mb-2 text-sm">Decision Support</h4>
-                  <p className="text-sm text-emerald-800">Switching from mechanical excavation to manual sorting, or reducing massive transport distances, significantly reduces forecasted emissions immediately.</p>
-                </div>
+             {/* Charts: Timeline Trend */}
+             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[380px]">
+                <h3 className="font-bold text-slate-800 text-lg mb-2 flex gap-2 items-center">
+                  Cumulative Impact Trend
+                </h3>
+                {activityLogs.length === 0 ? (
+                  <div className="w-full flex-1 flex items-center justify-center">
+                    <p className="text-sm font-medium text-slate-400 text-center px-8 border border-dashed border-slate-200 p-4 rounded-xl">Add activity logs to see timeline trend.</p>
+                  </div>
+                ) : (
+                  <div className="w-full flex-1 mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={activeImpact.timelineData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dx={-10} width={35} />
+                        <RechartsTooltip content={<CustomTooltip />} />
+                        <Line type="monotone" dataKey="impact" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 4, fill: "#0ea5e9", strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+             </div>
+          </div>
 
-                <div className="bg-amber-50/50 p-4 border border-amber-100 rounded-xl hover:shadow-md transition">
-                  <h4 className="font-bold text-amber-900 border-b border-amber-200 pb-2 mb-2 text-sm">Circular Economy</h4>
-                  <p className="text-sm text-amber-800">The <strong>Disposal Facility Type</strong> directly subtracts carbon from your score by recognizing avoided virgin material extraction when selecting Recycling.</p>
-                </div>
+          {/* Auto-Insights (Grid) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div className="bg-blue-50/50 p-4 border border-blue-100 rounded-xl hover:shadow-md transition">
+               <h4 className="font-bold text-blue-900 border-b border-blue-200 pb-2 mb-2 text-sm">Timeline Forecasting</h4>
+               <p className="text-xs text-blue-800 leading-relaxed">Your total score actively scales up based on the efficiency of your logs. Small daily emissions from transport compound enormously over large projects.</p>
+             </div>
+             
+             <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-xl hover:shadow-md transition">
+               <h4 className="font-bold text-emerald-900 border-b border-emerald-200 pb-2 mb-2 text-sm">Decision Support</h4>
+               <p className="text-xs text-emerald-800 leading-relaxed">Switching from mechanical excavation to manual sorting, or reducing massive transport distances, significantly reduces forecasted emissions.</p>
+             </div>
+
+             <div className="bg-amber-50/50 p-4 border border-amber-100 rounded-xl hover:shadow-md transition">
+               <h4 className="font-bold text-amber-900 border-b border-amber-200 pb-2 mb-2 text-sm">Circular Economy</h4>
+               <p className="text-xs text-amber-800 leading-relaxed">The <strong className="font-bold">Disposal Facility</strong> directly subtracts carbon from your score by recognizing avoided virgin material extraction when selecting Recycling.</p>
              </div>
           </div>
 
@@ -447,7 +483,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                  <button onClick={() => setIsLogModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition">Cancel</button>
-                 <button onClick={() => { setActivityLogs([...activityLogs, newLog]); setIsLogModalOpen(false); }} className="px-5 py-2 bg-amber-500 hover:bg-amber-600 shadow-md hover:shadow-lg text-white font-bold rounded-md text-sm transition transform hover:-translate-y-0.5 active:translate-y-0">Save Log Entry</button>
+                 <button onClick={() => { addActivityLog(newLog); setIsLogModalOpen(false); }} className="px-5 py-2 bg-amber-500 hover:bg-amber-600 shadow-md hover:shadow-lg text-white font-bold rounded-md text-sm transition transform hover:-translate-y-0.5 active:translate-y-0">Save Log Entry</button>
               </div>
            </div>
         </div>
