@@ -9,6 +9,7 @@ import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
 import DashboardPage from "@/components/DashboardPage";
 import MethodologyPage from "@/pages/MethodologyPage";
+import DocsPage from "@/pages/DocsPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import NotFound from "@/pages/NotFound";
 
@@ -48,6 +49,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/docs/:sectionId" element={<DocsPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -13,7 +13,7 @@ import {
   LineChart,
   Line
 } from "recharts";
-import { AlertCircle, BarChart3, Leaf, LayoutDashboard, Truck, Settings, Sparkles, CheckCircle, PlusCircle, Calendar, Trash2, Info, HelpCircle, RotateCcw, ChevronDown, ChevronUp, ArrowRight, Keyboard, Check, AlertTriangle, FileText } from "lucide-react";
+import { AlertCircle, BarChart3, Leaf, LayoutDashboard, Truck, Settings, Sparkles, CheckCircle, PlusCircle, Calendar, Trash2, Info, HelpCircle, RotateCcw, ChevronDown, ChevronUp, ArrowRight, Keyboard, Check, AlertTriangle, FileText, Recycle } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCarbonMappingEngine, ActivityLog } from "@/lib/useCarbonMappingEngine";
@@ -24,6 +24,57 @@ import UnsavedChangesGuard from "@/components/UnsavedChangesGuard";
 
 // Beautiful simple colors
 const COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#64748b"];
+
+/* ─── KPI Card Component (C&D Compliance KPIs) ─── */
+interface KpiCardProps {
+  label: string;
+  value: string;
+  sub: string;
+  color: "emerald" | "blue" | "indigo" | "amber" | "rose";
+  icon: React.ReactNode;
+  isEmpty?: boolean;
+  tooltip?: string;
+}
+
+const KPI_COLOR_MAP = {
+  emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", value: "text-emerald-800", icon: "bg-emerald-100 text-emerald-600" },
+  blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    value: "text-blue-800",    icon: "bg-blue-100 text-blue-600" },
+  indigo:  { bg: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-700",  value: "text-indigo-800",  icon: "bg-indigo-100 text-indigo-600" },
+  amber:   { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700",   value: "text-amber-800",   icon: "bg-amber-100 text-amber-600" },
+  rose:    { bg: "bg-rose-50",    border: "border-rose-200",    text: "text-rose-700",    value: "text-rose-800",    icon: "bg-rose-100 text-rose-600" },
+};
+
+function KpiCard({ label, value, sub, color, icon, isEmpty, tooltip }: KpiCardProps) {
+  const c = KPI_COLOR_MAP[color];
+  const card = (
+    <div className={`rounded-xl border ${c.border} ${c.bg} p-4 flex flex-col gap-3 transition-shadow hover:shadow-md`}>
+      <div className="flex items-center justify-between">
+        <span className={`text-[10px] font-black uppercase tracking-widest ${c.text}`}>{label}</span>
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${c.icon}`}>{icon}</span>
+      </div>
+      {isEmpty ? (
+        <div className="text-center py-1">
+          <p className={`text-xs font-semibold ${c.text} opacity-60`}>Add logs to calculate</p>
+        </div>
+      ) : (
+        <>
+          <p className={`text-3xl font-black tabular-nums tracking-tighter ${c.value}`}>{value}</p>
+          <p className={`text-[11px] font-semibold ${c.text} opacity-70 leading-tight`}>{sub}</p>
+        </>
+      )}
+    </div>
+  );
+
+  if (!tooltip) return card;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild><div>{card}</div></TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs"><p>{tooltip}</p></TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 // Recharts Custom Tooltip (Plain Language)
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -304,6 +355,45 @@ export default function DashboardPage() {
     date: logFormTouched.date && !newLog.date ? "Please select a date" : undefined,
   }), [newLog, logFormTouched]);
 
+  // ─── C&D KPI Derivations (from existing captured data) ───
+  // These must be above the early-return guard to satisfy Rules of Hooks.
+
+  // KPI 1: Waste Diversion Rate
+  const kpiDiversion = useMemo(() => {
+    if (activityLogs.length === 0) return null;
+    const totalTons = activityLogs.reduce((s, l) => s + l.truckLoads * 20, 0);
+    const diverted = activityLogs.reduce((s, l) => {
+      if (l.disposalType === "Recycling") return s + l.truckLoads * 20 * 1.0;
+      if (l.disposalType === "Mixed")     return s + l.truckLoads * 20 * 0.50;
+      return s;
+    }, 0);
+    const rate = totalTons > 0 ? (diverted / totalTons) * 100 : 0;
+    return { rate: Math.round(rate), totalTons: Math.round(totalTons) };
+  }, [activityLogs]);
+
+  // KPI 2: Waste Generation Rate (tons / sqm)
+  const kpiWasteRate = useMemo(() => {
+    if (activityLogs.length === 0 || projectInputs.areaSqft <= 0) return null;
+    const totalTons = activityLogs.reduce((s, l) => s + l.truckLoads * 20, 0);
+    const areaSqm = projectInputs.areaSqft / 10.7639;
+    const rate = totalTons / areaSqm;
+    return { rate: parseFloat(rate.toFixed(3)), totalTons: Math.round(totalTons) };
+  }, [activityLogs, projectInputs.areaSqft]);
+
+  // KPI 3: Compliance Score (0–100%)
+  const kpiCompliance = useMemo(() => {
+    let score = 0;
+    if (projectInputs.rulesFollowed === "Yes")      score += 60;
+    else if (projectInputs.rulesFollowed === "No")  score += 0;
+    else                                             score += 20;
+    if (projectInputs.complianceType === "CPCB rules")          score += 40;
+    else if (projectInputs.complianceType === "BMC guidelines") score += 35;
+    const riskLevel = score >= 80 ? "Low Risk" : score >= 40 ? "Medium Risk" : "High Risk";
+    const riskColor: KpiCardProps["color"] = score >= 80 ? "emerald" : score >= 40 ? "amber" : "rose";
+    return { score, riskLevel, riskColor };
+  }, [projectInputs.rulesFollowed, projectInputs.complianceType]);
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500">
@@ -355,7 +445,7 @@ export default function DashboardPage() {
             </Tooltip>
           </TooltipProvider>
           <button
-            onClick={() => navigate("/methodology")}
+            onClick={() => navigate("/docs/formulas")}
             className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-lg transition-colors"
           >
             <FileText className="w-3.5 h-3.5" /> Methodology
@@ -682,6 +772,44 @@ export default function DashboardPage() {
                <Sparkles className="w-5 h-5" />
                {simulationActive ? "Revert to Baseline" : "Optimize My Workflow"}
              </button>
+          </div>
+
+          {/* ─── C&D Compliance KPI Row ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <KpiCard
+              label="Waste Diversion Rate"
+              value={kpiDiversion ? `${kpiDiversion.rate}%` : "—"}
+              sub={
+                kpiDiversion
+                  ? `${kpiDiversion.totalTons.toLocaleString()}t total · ${kpiDiversion.rate >= 50 ? "✓ Above 50% target" : "↑ Target: ≥50% diverted"}`
+                  : ""
+              }
+              color="emerald"
+              icon={<Recycle className="w-4 h-4" />}
+              isEmpty={!kpiDiversion}
+              tooltip="% of total waste tonnage routed to Recycling or Mixed (partial) processing, rather than landfill. Target: ≥50% per CPCB C&D Guidelines."
+            />
+            <KpiCard
+              label="Waste Generation Rate"
+              value={kpiWasteRate ? `${kpiWasteRate.rate} t/m²` : "—"}
+              sub={
+                kpiWasteRate
+                  ? `${kpiWasteRate.totalTons.toLocaleString()}t logged · ${kpiWasteRate.rate <= 0.5 ? "✓ Within benchmark" : "↓ Benchmark: <0.5 t/m²"}`
+                  : ""
+              }
+              color="blue"
+              icon={<BarChart3 className="w-4 h-4" />}
+              isEmpty={!kpiWasteRate}
+              tooltip="Tons of C&D waste generated per square metre of construction/demolition area. Industry benchmark: <0.5 t/m². Used for regulatory benchmarking and Waste Management Plan submissions."
+            />
+            <KpiCard
+              label="Compliance Score"
+              value={`${kpiCompliance.score}/100`}
+              sub={`${kpiCompliance.riskLevel} · Based on rules followed & framework`}
+              color={kpiCompliance.riskColor}
+              icon={<CheckCircle className="w-4 h-4" />}
+              tooltip="Composite score derived from whether demolition rules were followed (60 pts) and the compliance framework in use (40 pts). Reflects regulatory adherence quality per C&D Waste Rules 2016."
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
