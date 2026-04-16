@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -26,16 +27,22 @@ import {
   ClipboardList,
   ShieldCheck,
   ChevronRight,
+  PlusCircle,
+  FolderOpen,
+  Trash2,
+  X,
+  Loader2
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { TraceCarbonLogo } from "@/components/ui/TraceCarbonLogo";
+import { useUserProjects } from "@/hooks/useUserProjects";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.08, duration: 0.45, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] },
+    transition: { delay: i * 0.08, duration: 0.45, ease: [0.25, 0.1, 0.25, 1] } as any,
   }),
 };
 
@@ -47,7 +54,6 @@ const dashboardSteps = [
     title: "Project Info",
     desc: "Building size + demolition method",
     color: "text-emerald-600 bg-emerald-50 border-emerald-200",
-    dotColor: "bg-emerald-500",
   },
   {
     n: "02",
@@ -55,7 +61,6 @@ const dashboardSteps = [
     title: "Material Mix",
     desc: "Concrete, steel, bricks %",
     color: "text-blue-600 bg-blue-50 border-blue-200",
-    dotColor: "bg-blue-500",
   },
   {
     n: "03",
@@ -63,7 +68,6 @@ const dashboardSteps = [
     title: "Daily Logs",
     desc: "Truck loads, fuel, disposal",
     color: "text-amber-600 bg-amber-50 border-amber-200",
-    dotColor: "bg-amber-500",
   },
   {
     n: "04",
@@ -71,7 +75,6 @@ const dashboardSteps = [
     title: "Compliance",
     desc: "CPCB / BMC framework check",
     color: "text-indigo-600 bg-indigo-50 border-indigo-200",
-    dotColor: "bg-indigo-500",
   },
 ];
 
@@ -126,11 +129,33 @@ const vendorServicesData = [
 const ProfilePage = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  
+  const { projects, addProject, deleteProject, isLoading: projectsLoading } = useUserProjects(user?.id);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
 
   if (!user) {
     navigate("/auth", { replace: true });
     return null;
   }
+
+  const handleCreateProject = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newProjectName.trim()) return;
+    const projectId = await addProject(newProjectName);
+    if (projectId) {
+      navigate(`/dashboard/${projectId}`);
+    }
+  };
+
+  const handleOpenDashboard = () => {
+    if (projects.length > 0) {
+      navigate(`/dashboard/${projects[0].id}`);
+    } else {
+      setIsCreatingProject(true);
+      setTimeout(() => document.getElementById('new-project-input')?.focus(), 100);
+    }
+  };
 
   const services = user.role === "vendor" ? vendorServicesData : userServices;
   const roleLabel = user.role === "vendor" ? "Vendor" : "User";
@@ -158,8 +183,8 @@ const ProfilePage = () => {
     {
       icon: BarChart3,
       title: "Open Carbon Dashboard",
-      desc: "Start logging your demolition site data",
-      action: () => navigate("/dashboard"),
+      desc: projects.length > 0 ? "Continue where you left off" : "Start logging your demolition site data",
+      action: handleOpenDashboard,
       color: "text-emerald-600 bg-emerald-50 border-emerald-200",
     },
     {
@@ -179,7 +204,46 @@ const ProfilePage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Create Project Modal Overlay */}
+      {isCreatingProject && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card w-full max-w-md rounded-2xl shadow-xl border border-border p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-xl flex items-center gap-2">
+                <FolderOpen className="text-emerald-600" /> New Project
+              </h3>
+              <button onClick={() => setIsCreatingProject(false)} className="text-muted-foreground hover:bg-secondary p-1 rounded-md transition">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateProject}>
+              <label className="text-sm font-semibold text-foreground mb-1 block">Project Name</label>
+              <input 
+                id="new-project-input"
+                type="text" 
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="e.g. Bandra Demolition Phase 1"
+                className="w-full border border-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all mb-4 bg-background"
+                autoFocus
+              />
+              <button 
+                type="submit" 
+                disabled={!newProjectName.trim()}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
+              >
+                Create & Open Dashboard
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
       {/* Top Nav */}
       <nav className="flex justify-between items-center px-6 md:px-8 py-5 max-w-7xl mx-auto border-b border-border/40">
         <TraceCarbonLogo />
@@ -213,7 +277,7 @@ const ProfilePage = () => {
             <p className="text-muted-foreground max-w-2xl text-lg mt-2">
               {user.role === "vendor"
                 ? "Your vendor profile is active. Explore the platform to understand where your services integrate with contractor workflows."
-                : "You're all set. Your Carbon Dashboard is ready — add your first project details to start calculating emissions."}
+                : "You're all set. Your Carbon Dashboard is ready — select a project below or start a new one to calculate emissions."}
             </p>
           </motion.div>
 
@@ -236,11 +300,75 @@ const ProfilePage = () => {
             ))}
           </motion.div>
 
+          {/* ─── Projects Section ─── */}
+          {user.role !== "vendor" && (
+            <motion.div variants={fadeUp} custom={2} className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-xl flex items-center gap-2">
+                  <FolderOpen size={20} className="text-emerald-600" /> My Projects
+                </h3>
+                <button 
+                  onClick={() => setIsCreatingProject(true)}
+                  className="flex items-center gap-1.5 text-sm font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition"
+                >
+                  <PlusCircle size={16} /> New Project
+                </button>
+              </div>
+              
+              <div className="bg-card border border-border rounded-xl shadow-sm p-4 h-full min-h-[160px]">
+                {projectsLoading ? (
+                  <div className="h-full flex items-center justify-center p-8 text-muted-foreground">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center p-8 text-muted-foreground">
+                    <FolderOpen size={32} className="mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="font-medium text-foreground mb-1">No projects yet</p>
+                    <p className="text-sm">Create your first project to start tracking your site's carbon emissions.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {projects.map((project) => (
+                      <div key={project.id} className="border border-border/60 hover:border-emerald-300 hover:shadow-md transition-all rounded-xl p-4 bg-background group relative flex flex-col">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-bold text-base text-foreground line-clamp-1 pr-6" title={project.name}>
+                            {project.name || "Untitled Project"}
+                          </h4>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }}
+                            className="absolute top-4 right-4 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-background rounded"
+                            title="Delete project"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-4">
+                          Created {project.createdAt?.toDate ? project.createdAt.toDate().toLocaleDateString() : "Just now"}
+                        </p>
+                        <div className="mt-auto flex items-center justify-between text-xs font-semibold">
+                          <span className="text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
+                            {project.areaSqft > 0 ? `${project.areaSqft.toLocaleString()} sq ft` : "Not synced"}
+                          </span>
+                          <button 
+                            onClick={() => navigate(`/dashboard/${project.id}`)}
+                            className="flex items-center gap-1 text-accent font-bold hover:underline"
+                          >
+                            Open <ArrowRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* ─── Dashboard Journey Preview (Users) ─── */}
           {user.role !== "vendor" && (
             <motion.div
               variants={fadeUp}
-              custom={2}
+              custom={3}
               className="mb-10 rounded-[16px] border border-border bg-card p-6 md:p-8 shadow-sm"
             >
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -249,7 +377,7 @@ const ProfilePage = () => {
                   <p className="text-sm text-muted-foreground">4 quick steps inside your dashboard — takes under 5 minutes.</p>
                 </div>
                 <button
-                  onClick={() => navigate("/dashboard")}
+                  onClick={handleOpenDashboard}
                   className="inline-flex items-center gap-2 bg-accent text-accent-foreground px-5 py-2.5 rounded-[8px] text-sm font-semibold hover:brightness-110 transition-all shadow-sm shrink-0"
                 >
                   Go to Dashboard <ArrowRight size={16} />
@@ -303,7 +431,7 @@ const ProfilePage = () => {
             {/* Account Details */}
             <motion.div
               variants={fadeUp}
-              custom={3}
+              custom={4}
               className="lg:col-span-2 bg-card rounded-[12px] p-6 md:p-8 shadow-sm border border-border"
             >
               <h3 className="font-bold text-lg mb-5 flex items-center gap-2 text-foreground">
@@ -327,7 +455,7 @@ const ProfilePage = () => {
             {/* Primary Objective / Services */}
             <motion.div
               variants={fadeUp}
-              custom={4}
+              custom={5}
               className="bg-accent/10 rounded-[12px] p-6 md:p-8 border border-accent/20 shadow-sm"
             >
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-deep dark:text-emerald-light">
@@ -364,7 +492,7 @@ const ProfilePage = () => {
           </div>
 
           {/* ─── Platform Capabilities Grid ─── */}
-          <motion.div variants={fadeUp} custom={5} className="mb-10">
+          <motion.div variants={fadeUp} custom={6} className="mb-10">
             <div className="mb-6">
               <h3 className="font-bold text-lg mb-1">
                 {user.role === "vendor" ? "How the platform works for vendors" : "What you can do on TraceCarbon"}
@@ -381,7 +509,7 @@ const ProfilePage = () => {
                   key={i}
                   initial="hidden"
                   animate="visible"
-                  custom={i + 5}
+                  custom={i + 6}
                   variants={fadeUp}
                   className="bg-card rounded-[12px] p-5 shadow-sm border border-border hover:shadow-elevated transition-shadow flex flex-col"
                 >
@@ -406,7 +534,7 @@ const ProfilePage = () => {
               Your dashboard is live and cloud-synced. Every log you add is saved automatically.
             </p>
             <button
-              onClick={() => navigate("/dashboard")}
+              onClick={handleOpenDashboard}
               className="inline-flex items-center gap-2.5 bg-accent text-accent-foreground px-8 py-4 rounded-[8px] text-base font-semibold hover:brightness-110 transition-all active:scale-[0.98] shadow-elevated"
             >
               Open Carbon Dashboard <ArrowRight size={18} />

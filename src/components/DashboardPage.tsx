@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   XAxis,
@@ -182,6 +182,8 @@ export default function DashboardPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   
+  const { projectId } = useParams<{ projectId: string }>();
+  
   // Use Firestore-Synced Engine
   const { 
     projectInputs, 
@@ -195,7 +197,7 @@ export default function DashboardPage() {
     simulationActive,
     toggleSimulation,
     isLoading
-  } = useCarbonMappingEngine(user?.id);
+  } = useCarbonMappingEngine(user?.id, projectId);
 
   // Modal State for New Activity Log
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -418,7 +420,12 @@ export default function DashboardPage() {
 
       {/* Top Application Header */}
       <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex justify-between items-center shadow-sm sticky top-0 z-50">
-        <TraceCarbonLogo />
+        <div className="flex items-center gap-6">
+          <TraceCarbonLogo />
+          <Link to="/profile" className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors">
+            <ArrowRight className="w-3.5 h-3.5 rotate-180" /> Back to Projects
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           {/* Persistent emissions summary (Shneiderman R8: Reduce memory load) */}
           <div className="hidden md:flex items-center gap-3 text-sm">
